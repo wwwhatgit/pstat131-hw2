@@ -2,10 +2,12 @@
 title: "Homework 2"
 author: "PSTAT 131/231"
 output:
-    html_document:
-      toc: true
-      toc_float: true
-      code_folding: show
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
@@ -15,15 +17,16 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE,
 
 ## Linear Regression
 
-For this lab, we will be working with a data set from the UCI (University of California, Irvine) Machine Learning repository ([see website here](http://archive.ics.uci.edu/ml/datasets/Abalone)). The full data set consists of $4,177$ observations of abalone in Tasmania. (Fun fact: [Tasmania](https://en.wikipedia.org/wiki/Tasmania "Tasmania") supplies about $25\%$ of the yearly world abalone harvest.)
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+library(ggthemes)
+library(yardstick)
+tidymodels_prefer()
 
-![*Fig 1. Inside of an abalone shell.*](https://cdn.shopify.com/s/files/1/1198/8002/products/1d89434927bffb6fd1786c19c2d921fb_2000x_652a2391-5a0a-4f10-966c-f759dc08635c_1024x1024.jpg?v=1582320404){width="152"}
-
-The age of an abalone is typically determined by cutting the shell open and counting the number of rings with a microscope. The purpose of this data set is to determine whether abalone age (**number of rings + 1.5**) can be accurately predicted using other, easier-to-obtain information about the abalone.
-
-The full abalone data set is located in the `\data` subdirectory. Read it into *R* using `read_csv()`. Take a moment to read through the codebook (`abalone_codebook.txt`) and familiarize yourself with the variable definitions.
-
-Make sure you load the `tidyverse` and `tidymodels`!
+```
 
 ### Question 1
 
@@ -31,10 +34,34 @@ Your goal is to predict abalone age, which is calculated as the number of rings 
 
 Assess and describe the distribution of `age`.
 
+The age histogram is right skewed means that more of the abalone has age less than 15.
+```{r}
+
+abalone <- read.csv(file = 'abalone.csv')
+abalone['age']=abalone['rings']+1.5
+
+ggplot(abalone, aes(x=age)) + geom_histogram(binwidth=1)
+
+
+```
+
 ### Question 2
 
 Split the abalone data into a training set and a testing set. Use stratified sampling. You should decide on appropriate percentages for splitting the data.
+```{r}
+set.seed(3435)
 
+abalone_split <- initial_split(abalone, prop = 0.80,
+                                strata = age)
+abalone_train <- training(abalone_split)
+abalone_test <- testing(abalone_split)
+
+
+a <- c(16.5,8.5,10.5,11.5,8.5,9.5,21.5,17.5,10.5,20.5)
+
+
+b <- scale(a,center=TRUE,scale=TRUE)
+```
 *Remember that you'll need to set a seed at the beginning of the document to reproduce your results.*
 
 ### Question 3
@@ -57,9 +84,34 @@ Steps for your recipe:
 
 You'll need to investigate the `tidymodels` documentation to find the appropriate step functions to use.
 
+
+```{r}
+# we are not include 'rings' to predict age because age is directly calculated from rings
+
+
+abalone_recipe <- recipe(age ~ ., data = abalone_train) %>% 
+  step_rm('rings')%>%
+  step_dummy(all_nominal_predictors())%>%
+  step_interact(terms = ~type:shucked_weight)%>%
+  step_interact(terms = ~longest_shell:diameter)%>%
+  step_interact(terms = ~shucked_weight:shell_weight)%>%
+  step_center(all_predictors())%>%
+  step_scale(all_predictors())
+
+```
 ### Question 4
 
 Create and store a linear regression object using the `"lm"` engine.
+
+```{r}
+
+lm_model <- linear_reg() %>% 
+  set_engine("lm")
+
+
+```
+
+
 
 ### Question 5
 
@@ -69,9 +121,40 @@ Now:
 2.  add the model you created in Question 4, and
 3.  add the recipe that you created in Question 3.
 
+```{r}
+myWorkflow <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(abalone_recipe)
+
+
+
+```
+
+
+
+
+
 ### Question 6
 
 Use your `fit()` object to predict the age of a hypothetical female abalone with longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1.
+
+```{r}
+lm_fit <- fit(myWorkflow,abalone_train)
+
+lm_fit %>% 
+  # This returns the parsnip object:
+  extract_fit_parsnip() %>% 
+  # Now tidy the linear model object:
+  tidy()
+
+predicted_age <- 11.42335329+0.5*0.85928463+0.1*2.37253150+0.3*0.25076110+
+  4*4.24434255+1*-3.65543589+2*-0.81318578+1*1.88006719-0.33199999+0.02721407-
+  3.26447671-0.22901120
+  
+
+```
+
+
 
 ### Question 7
 
@@ -80,6 +163,25 @@ Now you want to assess your model's performance. To do this, use the `yardstick`
 1.  Create a metric set that includes *R^2^*, RMSE (root mean squared error), and MAE (mean absolute error).
 2.  Use `predict()` and `bind_cols()` to create a tibble of your model's predicted values from the **training data** along with the actual observed ages (these are needed to assess your model's performance).
 3.  Finally, apply your metric set to the tibble, report the results, and interpret the *R^2^* value.
+
+
+```{r}
+
+abalone_train_res <- predict(lm_fit, new_data = abalone_train %>% select(-c(age)))
+
+abalone_train_res <- bind_cols(abalone_train_res, abalone_train %>% select(age))
+
+  
+
+abalone_metrics <- metric_set(rmse, rsq, mae)
+abalone_metrics(abalone_train_res, truth = age, 
+                estimate = .pred)
+
+
+# In our model,r-squared is 0.5464 reveals that 54% of the data fit the regression model.
+```
+
+
 
 ### Required for 231 Students
 
