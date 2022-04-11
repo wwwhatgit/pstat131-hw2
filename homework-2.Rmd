@@ -2,12 +2,12 @@
 title: "Homework 2"
 author: "PSTAT 131/231"
 output:
-  pdf_document:
-    toc: yes
   html_document:
     toc: yes
     toc_float: yes
     code_folding: show
+  pdf_document:
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE,
 ## Linear Regression
 
 ```{r}
+
 library(ggplot2)
 library(tidyverse)
 library(tidymodels)
@@ -151,7 +152,7 @@ predicted_age <- 11.42335329+0.5*0.85928463+0.1*2.37253150+0.3*0.25076110+
   4*4.24434255+1*-3.65543589+2*-0.81318578+1*1.88006719-0.33199999+0.02721407-
   3.26447671-0.22901120
   
-
+predicted_age
 ```
 
 
